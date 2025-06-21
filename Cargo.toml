@@ -6,14 +6,23 @@ version = "0.1.0"
 [[bin]]
 name = "part0_hello_world"
 path = "./src/bin/part0_hello_world.rs"
+test = false
+doctest = false
+bench = false
 
 [[bin]]
 name = "part1_basic"
 path = "./src/bin/part1_basic.rs"
+test = false
+doctest = false
+bench = false
 
 [[bin]]
 name = "part2_advanced"
 path = "./src/bin/part2_advanced.rs"
+test = false
+doctest = false
+bench = false
 
 [dependencies]
 esp-bootloader-esp-idf = "0.1.0"
