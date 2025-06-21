@@ -79,12 +79,12 @@ async fn main(spawner: Spawner) {
 
     info!("Embassy initialized!");
 
-    let mut rng = esp_hal::rng::Rng::new(peripherals.RNG); // change to mut
+    let mut rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let timer1 = TimerGroup::new(peripherals.TIMG0);
     let wifi_init = esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
         .expect("Failed to initialize WIFI/BLE controller");
     let (wifi_controller, interfaces) = esp_wifi::wifi::new(&wifi_init, peripherals.WIFI)
-        .expect("Failed to initialize WIFI controller"); // remove _
+        .expect("Failed to initialize WIFI controller");
 
     let mut net_stack_resources = embassy_net::StackResources::<4>::new();
     let seed = (rng.random() as u64) << 32 | rng.random() as u64;
