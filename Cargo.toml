@@ -7,6 +7,14 @@ version = "0.1.0"
 name = "part0_hello_world"
 path = "./src/bin/part0_hello_world.rs"
 
+[[bin]]
+name = "part1_basic"
+path = "./src/bin/part1_basic.rs"
+
+[[bin]]
+name = "part2_advanced"
+path = "./src/bin/part2_advanced.rs"
+
 [dependencies]
 esp-bootloader-esp-idf = "0.1.0"
 esp-hal = { version = "=1.0.0-beta.1", features = [
@@ -22,6 +30,7 @@ embassy-net = { version = "0.7.0", features = [
   "medium-ethernet",
   "tcp",
   "udp",
+  "dns",  # добавленный feature
 ] }
 embedded-io = "0.6.1"
 embedded-io-async = "0.6.1"
@@ -37,7 +46,7 @@ esp-println = { version = "0.14.0", features = ["esp32", "log-04"] }
 critical-section = "1.2.0"
 embassy-executor = { version = "0.7.0", features = [
   "log",
-  "task-arena-size-20480",
+  "task-arena-size-32768", # добавленный feature
 ] }
 embassy-time = { version = "0.4.0", features = ["log"] }
 esp-hal-embassy = { version = "0.8.1", features = ["esp32", "log-04"] }
@@ -61,8 +70,25 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
   "socket-raw",
   "socket-tcp",
   "socket-udp",
+  "dns-max-server-count-4" # добавленный feature
 ] }
 static_cell = { version = "2.1.0", features = ["nightly"] }
+
+# Дополнительные зависимости
+heapless = { version = "0.8.0", features = ["serde"] }
+time = {version = "0.3.41", default-features = false, features = ["parsing"]}
+embassy-futures = "0.1.1"
+serde = { version = "1.0", default-features = false, features = ["derive"]}
+serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
+embassy-sync = "0.7.0"
+anyhow = { version = "1.0.98", default-features = false } 
+reqwless = { version = "0.13.0", default-features = false, features = [
+  "alloc",
+  "embedded-tls",
+] }
+ssd1306 = {version = "0.10.0", features = ["async"]} 
+embedded-graphics = "0.8.1" 
+embedded-layout = "0.4.1" 
 
 
 [profile.dev]
