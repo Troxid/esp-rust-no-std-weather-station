@@ -5,7 +5,6 @@ use embedded_graphics::prelude::*;
 use embedded_graphics::primitives::{PrimitiveStyle, Rectangle, StyledDrawable, Triangle};
 use embedded_graphics::Drawable;
 use embedded_layout::prelude::*;
-use time::Time;
 
 pub struct TimePlot {
     pub bar_width: u32,

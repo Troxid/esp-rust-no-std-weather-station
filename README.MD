@@ -1,10 +1,10 @@
-# esp32-weather-station
+# esp-rust-no-std-weather-station
 
-![screen](_assets/screen.png)
+![screen](_assets/screen.jpeg)
 
-Простой метео информер на базе esp32 + rust + [embassy](https://embassy.dev/).
-Embassy - Асинхронный рантайм для no_std rust
-Показывает актуальную погоду с [open-meteo](https://open-meteo.com/en/docs)
+Простой метеоинформер на базе esp32 + rust + [embassy](https://embassy.dev/). Показывает актуальную погоду с [open-meteo](https://open-meteo.com/en/docs)
+Embassy - Асинхронный рантайм для no_std rust  
+
 
 # Необходимые материалы
 
@@ -61,9 +61,9 @@ Embedded Rust:
 
 - [Книга "The Rust on ESP Book" ](https://docs.esp-rs.org/book/introduction.html)
 - [Примеры использования ESP-IDF. Базовая перифирия (GPIO, I2C, ADC и т.д.)](https://github.com/esp-rs/esp-hal/tree/main/examples/src/bin)
-- [Серия статей Rust+ESP32](https://blog.theembeddedrustacean.com/series/esp32c3-embedded-rust-hal)
 - [Список полезных репозиториев для Rust Ebmbedded (awesome-embedded-rust)](https://github.com/rust-embedded/awesome-embedded-rust)
 - [Сайт с готовыми драйверами для периферии (170+). Температурные датчики, акселерометры, дисплеи и т.д.](https://tweedegolf.github.io/drive-rs/)
+- [Embassy Book](https://embassy.dev/book/)
 - [Введение в Embassy (youtube)](https://www.youtube.com/watch?v=pDd5mXBF4tY)
 
 # Настройка окружения
@@ -71,7 +71,7 @@ Embedded Rust:
 Для тех у кого уже установлен rust, можно перейти к
 шагу [3 Установка ESP для Rust](README.MD#3-Установка-ESP-утилит-для-Rust)
 
-Так же, что бы пропустить этап настройки, можно воспользоваться готовым образом для виртуальный машины *Virtual Box* с
+Так же, что бы пропустить этап настройки, можно воспользоваться готовым образом для виртуальной машины *Virtual Box* с
 настроенным окружением:
 [ubuntu-esp-rust (яндекс диск)](https://disk.yandex.com/d/BcbxjNeOJRSc9Q)
 
@@ -231,18 +231,18 @@ code esp32-weather-station
 
 ## Тестовая прошивка
 
-В левой панели `Explorer` посмотрим на структуру проекта
-Наиболее интересные файлы для нас это:  
+В левой панели `Explorer` посмотрим на структуру проекта  
+Наиболее интересные файлы для нас это:   
 `src/bin/main.rs` - исходный код прошивки МК (прошивок может быть несколько)  
 `src/lib.rs` - общий исходный код для всех прошивок.  
 `.cargo/config.toml` - локальная конфигурация cargo для компиляции. В нем можно указать уровень логирования и baudrate
-загрузки прошивки
+загрузки прошивки  
 `Cargo.toml` - настройки проекта и используемые библиотеки
 
 `esp-generate` создал [тестовую прошивку](src/bin/part0_hello_world.rs), в которой происходит инициализация периферии и
 печать `hello world` в serial порт.
 
-Введем в терминал `cargo build`.  
+Введем в терминал `cargo build`.   
 `cargo build --release` - только соберет проект не прошивая МК.
 
 `cargo run --release` - скомпилирует и прошьет МК. Ключ `--release` применяет оптимизацию, которая помагают избежать
@@ -375,15 +375,15 @@ seed,
 
 ### Embassy
 
-В процессе работы, МК необходимо выполнять несколько задач:
+В процессе работы, МК необходимо выполнять несколько операций:
 
-- ??? сетевого стека
+- Поддержка работы сетевого стека
 - Периодический опрос метео сервиса
 - Подключение к точке доступа
 - Рисование в буфер кадра и отправка его на экран
 
-Часть из этих задач, такие как http опросы и отправка по i2c будут блокировать поток выполнения программы.
-Для ???
+Часть из этих операций, такие как http опросы и отправка по i2c будут блокировать поток выполнения программы.  
+???  
 
 В `embassy` псевдопараллельная многозадачность реализована с помощью зеленых потоков
 или [task](https://docs.embassy.dev/embassy-executor/git/cortex-m/attr.task.html) в терминах `embassy`.
@@ -405,8 +405,7 @@ async fn screen_renderer_task() {
 
 В нашем случае, для коммуникации между задачами будем использовать примитив
 синхронизации [PubSubChannel](https://docs.embassy.dev/embassy-sync/git/default/pubsub/struct.PubSubChannel.html)  
-`PubSubChannel` - шина событий, которая работает по
-модели [подписчик-издатель](https://ru.wikipedia.org/wiki/%D0%98%D0%B7%D0%B4%D0%B0%D1%82%D0%B5%D0%BB%D1%8C_%E2%80%94_%D0%BF%D0%BE%D0%B4%D0%BF%D0%B8%D1%81%D1%87%D0%B8%D0%BA).  
+`PubSubChannel` - шина событий, которая работает по модели [подписчик-издатель](https://ru.wikipedia.org/wiki/%D0%98%D0%B7%D0%B4%D0%B0%D1%82%D0%B5%D0%BB%D1%8C_%E2%80%94_%D0%BF%D0%BE%D0%B4%D0%BF%D0%B8%D1%81%D1%87%D0%B8%D0%BA).  
 В глобальной области видимости объявим перечисление событий, которые могут происходить в программе:
 
 ```rust
@@ -473,66 +472,56 @@ async fn wifi_connection<'a>(ssid: &str, password: &str, mut controller: WifiCon
 ### Фоновая задача: опрос метео сервиса
 
 ```rust
-async fn weather_updater(pubsub: &'static PubSub, net_stack: embassy_net::Stack<'_>, mut rng: Rng) {
-    const RX_SIZE: usize = 4096;
-    const TX_SIZE: usize = 4096;
-    let mut rx_buffer = [0; RX_SIZE];
-    let mut tx_buffer = [0; TX_SIZE];
-    let dns = DnsSocket::new(net_stack);
-    let tcp_state = TcpClientState::<1, TX_SIZE, RX_SIZE>::new();
-    let tcp = TcpClient::new(net_stack, &tcp_state);
+async fn weather_updater(pubsub: &'static PubSub, net_stack: embassy_net::Stack<'_>) {
+  const RX_SIZE: usize = 4096;
+  const TX_SIZE: usize = 4096;
+  let dns = DnsSocket::new(net_stack);
+  let tcp_state = TcpClientState::<1, TX_SIZE, RX_SIZE>::new();
+  let tcp = TcpClient::new(net_stack, &tcp_state);
 
-    let tls_seed = rng.random() as u64 | ((rng.random() as u64) << 32);
-    let tls = TlsConfig::new(
-        tls_seed,
-        &mut rx_buffer,
-        &mut tx_buffer,
-        reqwless::client::TlsVerify::None,
-    );
+  let url = "http://api.open-meteo.com/v1/forecast?latitude=55.7522&longitude=37.6156&hourly=temperature_2m&current=temperature_2m&timezone=Europe%2FMoscow&forecast_days=1";
+  let mut client = HttpClient::new(&tcp, &dns);
+  let publisher = pubsub.immediate_publisher();
+  let mut http_resp_buffer = [0u8; RX_SIZE];
 
-    let url = "https://api.open-meteo.com/v1/forecast?latitude=55.7522&longitude=37.6156&hourly=temperature_2m&current=temperature_2m&timezone=Europe%2FMoscow&forecast_days=1";
-    let mut client = HttpClient::new_with_tls(&tcp, &dns, tls);
-    let publisher = pubsub.immediate_publisher();
-    let mut http_resp_buffer = [0u8; RX_SIZE];
+  loop {
+    if net_stack.is_link_up() {
+      let date: anyhow::Result<PrimitiveDateTime> = try {
+        let mut http_request = client
+                .request(Method::GET, url)
+                .await
+                .map_err(|e| anyhow!("error request {:?}", e))?;
 
-    loop {
-        if net_stack.is_link_up() {
-            let date: anyhow::Result<PrimitiveDateTime> = try {
-                let mut http_request = client
-                    .request(Method::GET, url)
-                    .await
-                    .map_err(|e| anyhow!("error request {:?}", e))?;
+        let response = http_request
+                .send(&mut http_resp_buffer)
+                .await
+                .map_err(|e| anyhow!("error send {:?}", e))?;
 
-                let response = http_request
-                    .send(&mut http_resp_buffer)
-                    .await
-                    .map_err(|e| anyhow!("error send {:?}", e))?;
+        let res = response
+                .body()
+                .read_to_end()
+                .await
+                .map_err(|e| anyhow!("error body read {:?}", e))?;
 
-                let res = response
-                    .body()
-                    .read_to_end()
-                    .await
-                    .map_err(|e| anyhow!("error body read {:?}", e))?;
+        let json = serde_json::from_slice::<serde_json::Value>(&res)
+                .map_err(|e| anyhow!("json syntax error {:?}", e))?;
 
-                let json = serde_json::from_slice::<serde_json::Value>(&res)
-                    .map_err(|e| anyhow!("json syntax error {:?}", e))?;
+        let date_raw = json["current"]["time"]
+                .as_str()
+                .ok_or(anyhow!("fail to get json 'current.time' field"))?;
 
-                let date_raw = json["current"]["time"]
-                    .as_str()
-                    .ok_or(anyhow!("fail to get json 'current.time' field"))?;
+        let date = PrimitiveDateTime::parse(date_raw, &Iso8601::DEFAULT)
+                .map_err(|e| anyhow!("fail to parse date {:?}", e))?;
 
-                let date = PrimitiveDateTime::parse(date_raw, &Iso8601::DEFAULT)
-                    .map_err(|e| anyhow!("fail to parse date {:?}", e))?;
-
-                date
-            };
-            if let Ok(date) = date {
-                publisher.publish_immediate(AppEvent::TimeChanged(date));
-            }
-            debug!("http response {:?}", date);
-        }
-        Timer::after(Duration::from_millis(5000)).await;
+        date
+      };
+      if let Ok(date) = date {
+        publisher.publish_immediate(AppEvent::TimeChanged(date));
+      }
+      debug!("http response {:?}", date);
     }
+    Timer::after(Duration::from_millis(5000)).await;
+  }
 }
 ```
 
@@ -705,68 +694,14 @@ let _ = Triangle::new(Point::new( - 1, - 2), Point::new(1, - 2), Point::new(0, 1
 
 # Прошивки
 
-## Тест экрана
-
-[source: test_screen](example/test_screen.rs)
-
-```shell 
-cargo run --example test_screen --release        
+```shell
+cargo run --release --bin part0_hello_world
 ```
 
-## Время, дата и температура без HTTP запросов
-
-[source: test_screen](example/firmware_v1.rs)
-
-```shell 
-cargo run --example firmware_v1 --release        
+```shell
+cargo run --release --bin part1_basic
 ```
 
-## Время, дата и температура с HTTP запросами
-
-[source: test_screen](example/firmware_v2.rs)
-
-```shell 
-cargo run --example firmware_v2 --release        
-```
-
-## Полная прошивка c комментариями и объяснениями
-
-[source: main.rs](src/main.rs)
-
-```shell 
-cargo run --release        
-```
-
-# Остальное
-
-## Решение проблемы ограничений скорости github
-
-В последнее время, наблюдаются проблемы при скачивании с github.  
-При первой сборке проекта, `cargo` попытается командой `git clone` скачать `ESP-IDF`, но упадет с ошибкой
-`error: RPC failed; curl 92 HTTP/2 stream 0 was not closed cleanly: CANCEL (err 8)` по таймауту из-за медленной скорости
-скачивания.   
-Необходимо либо указать пользовательский токена github, либо зеркало репозитория, где ограничений на скачивания нет:
-
-### Персональный токен github
-
-Если вы планируете продолжать работать с проектом, то крайне рекомендуется завести свой, персональный github токен.   
-Это можно сделать в своем профиле github
-`Developer Settings > Personal access Tokens > Fine grained tokens > Generate token`.   
-Достаточно будет создать только на чтение, без дополнительных прав.
-
-```toml
-[env]
-ESP_IDF_REPOSITORY = "https://<TOKEN>@github.com/espressif/esp-idf.git"
-```
-
-###  
-
-Для windows машин, необходимо выбрать терминал PowerShell (желательно от имени Администратора), выполнить скрипт по
-импорту путей
-
-```powershell
-C:\Users\username\export-esp.ps1
-# Добавляем Git и Python в PATH окружения если не добавили на ранних этапах
-$env:Path += ";C:\Program Files\Git\cmd"
-$env:Path += ":C:\Users\username\AppData\Local\Programs\Python\Python313"
+```shell
+cargo run --release --bin part2_advanced
 ```

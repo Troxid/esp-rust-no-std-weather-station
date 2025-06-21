@@ -87,7 +87,7 @@ async fn main(spawner: Spawner) {
 
     info!("Embassy initialized!");
 
-    let mut rng = esp_hal::rng::Rng::new(peripherals.RNG); 
+    let mut rng = esp_hal::rng::Rng::new(peripherals.RNG);
     let timer1 = TimerGroup::new(peripherals.TIMG0);
     let wifi_init = esp_wifi::init(timer1.timer0, rng, peripherals.RADIO_CLK)
         .expect("Failed to initialize WIFI/BLE controller");
