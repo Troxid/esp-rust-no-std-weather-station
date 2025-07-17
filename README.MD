@@ -159,7 +159,7 @@ cargo install espflash
 https://github.com/esp-rs/espup
 
 ```shell
-cargo install espup
+cargo install espup --locked
 espup install
 ```
 
