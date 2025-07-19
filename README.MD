@@ -137,15 +137,15 @@ LSP ([более подробно](https://rust-analyzer.github.io/manual.html))
 При сборке проекта будет использоваться обычная команда `cargo run` и в большинстве случаев, ручной вызов этих утилит не
 потребуется.
 
+
+На **linux машинах** может потребоваться установка дополнительных пакетов:
+```
+apt-get install -y libudev-dev pkg-config gcc build-essential curl
+```
+
 ### espflash
 
 [репозиторий + документация](https://github.com/esp-rs/espflash/blob/main/espflash/README.md)
-
-На **linux машинах** может потребоваться установка дополнительного пакета:
-
-```
-apt-get install libudev-dev pkg-config
-```
 
 далее для всех ОС:
 
