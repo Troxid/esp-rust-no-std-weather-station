@@ -24,21 +24,6 @@ Embassy - Асинхронный рантайм для no_std rust
 
 Примеры комплектов:
 
-## Экран и МК отдельно
-
-![devkit1](_assets/devkit1_1.jpeg)
-
-> **Warning**  
-> Экран и девкит может поставляться с незапаянными штырьковыми разъемами! Может потребоваться пайка
-
-[OLED SSD1306](https://www.ozon.ru/product/oled-displey-0-96-128x64-i2c-belyy-945285571/?avtc=1&avte=4&avts=1731359337)
-
-[ESP32](https://www.ozon.ru/product/esp32-devkit-38pin-kontroller-esp32-wroom-32-1712466151/?asb=4YstCflXD96uqMLauwoLdrpQV2di4mSfafcY9jjcj3o%253D&asb2=bk60acPFqJK_qYXImt6teQC9dRnWb5UyF6-MYuU-WDKcL4FCB2stRmCAlbGafX-QRJ-LY2GJUSmEM0_6cqnxh0jgrXC6epUfEvWqbu-kjzlD2rVar6v3axaYR6WVz9pyqY0gomrz9zUqoeSl8QrVqzW93XDENFbmviQw-9MTRck&avtc=1&avte=4&avts=1731359541&keywords=esp32)
-
-[Макетная плата на 170+ точек](https://www.ozon.ru/product/bespaechnaya-maketnaya-plata-breadboard-170-tochek-1012687498/?asb=ZDxXko1pTvutL5%252Fnh0tgzzfF6WZARy%252FAldmVRp5dI28%253D&asb2=2m27FwpI6os8QJ2bUvzGYKKIc0au6Ac-TJsu2VdWU55Rsg-_DqC2XvKI9Pe-TAwisEFotJ8S3YYK2E_z6lcfiw&avtc=1&avte=4&avts=1731360479&keywords=breadboard)
-
-[Провода перемычки Dupont](https://www.ozon.ru/product/provoda-peremychki-dupont-30-sm-3-vida-po-40-sht-mama-mama-papa-papa-papa-mama-dlya-arduino-1051231534/?asb=riLQ0aCCIN%252B6T6zq6UEbic8gPR18Wndf2Yszn2b3QT4%253D&asb2=FVEu6zkxrJzi6G3g_BwEPUEp0TL1_IzPCrGzr6LAkosND_sPccnNYwZmBDbbhaO0r6n_EZnOLJErxg414yEy_A&avtc=1&avte=4&avts=1731360540&keywords=провода+для+ардуино)
-
 ## МК вместе с экраном на плате
 
 ![devkit1](_assets/devkit2_1.jpeg)
@@ -173,7 +158,7 @@ GITHUB_TOKEN=token espup install
 ### esp-generate
 
 ```shell
-cargo install esp-generate --locked
+cargo install esp-generate@0.5.0 --locked
 ```
 
 На **windows машинах** может потребоваться перезагрузка
@@ -316,8 +301,12 @@ reqwless = { version = "0.13.0", default-features = false, features = [
     "embedded-tls",
 ] }
 ssd1306 = { version = "0.10.0", features = ["async"] }
+embedded-nal-async = "0.8.0"
 embedded-graphics = "0.8.1"
 embedded-layout = "0.4.1"
+sntpc = { version = "0.6.0", default-features = false, features = [
+  "embassy-socket",
+] }
 #...
 ```
 
@@ -602,9 +591,9 @@ async fn screen_renderer_task(
 
 - Получение прогнозы погоды и графика осадков
 - Рисование времени, даты, графика осадков
-- Обработка нажатия сенсорного вывода для смены страниц
+- Получение времени по SNTP
 
-[Исходный код](src/bin/part2_advanced.rs)
+[Исходный код](src/bin/part2_advanced_v2.rs)
 
 # Шпаргалка: Функции для рисования
 
@@ -703,5 +692,5 @@ cargo run --release --bin part1_basic
 ```
 
 ```shell
-cargo run --release --bin part2_advanced
+cargo run --release --bin part2_advanced_v2
 ```

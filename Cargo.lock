@@ -947,6 +947,7 @@ dependencies = [
  "embedded-io",
  "embedded-io-async",
  "embedded-layout",
+ "embedded-nal-async",
  "esp-alloc",
  "esp-backtrace",
  "esp-bootloader-esp-idf",
@@ -960,6 +961,7 @@ dependencies = [
  "serde",
  "serde_json",
  "smoltcp",
+ "sntpc",
  "ssd1306",
  "static_cell",
  "time",
@@ -1803,6 +1805,16 @@ dependencies = [
  "heapless 0.8.0",
  "log",
  "managed",
+]
+
+[[package]]
+name = "sntpc"
+version = "0.6.1"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "13d84c42dedf8b01d52b62272684741866938260e74b9e58851f680b2a92854b"
+dependencies = [
+ "cfg-if",
+ "embassy-net",
 ]
 
 [[package]]

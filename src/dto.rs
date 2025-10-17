@@ -9,9 +9,9 @@ pub struct OpenMeteoResponse {
 
 #[derive(Debug, serde::Deserialize)]
 pub struct OpenMeteoDaily {
-    pub weather_code: heapless::Vec<f32, 1>,
-    pub temperature_2m_max: heapless::Vec<f32, 1>,
-    pub temperature_2m_min: heapless::Vec<f32, 1>,
+    pub weather_code: [f32; 1],
+    pub temperature_2m_max: [f32; 1],
+    pub temperature_2m_min: [f32; 1],
 }
 
 #[derive(Debug, serde::Deserialize)]

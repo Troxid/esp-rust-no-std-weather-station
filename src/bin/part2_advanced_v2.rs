@@ -8,15 +8,18 @@
 #![feature(try_blocks)]
 
 extern crate alloc;
+use core::net::{IpAddr, SocketAddr};
+
 use alloc::format;
 use anyhow::anyhow;
 use embassy_executor::Spawner;
 use embassy_net::dns::DnsSocket;
 use embassy_net::tcp::client::{TcpClient, TcpClientState};
+use embassy_net::udp::{PacketMetadata, UdpSocket};
 use embassy_net::DhcpConfig;
 use embassy_sync::blocking_mutex::raw::NoopRawMutex;
-use embassy_sync::pubsub::PubSubChannel;
-use embassy_time::{Duration, Timer};
+use embassy_sync::pubsub::{DynPublisher, DynSubscriber, PubSubChannel};
+use embassy_time::{with_timeout, Duration, Timer};
 use embedded_graphics::mono_font::ascii::{
     FONT_5X7, FONT_5X8, FONT_6X13_BOLD, FONT_7X13, FONT_9X15_BOLD,
 };
@@ -24,32 +27,36 @@ use embedded_graphics::mono_font::MonoTextStyle;
 use embedded_graphics::pixelcolor::BinaryColor;
 use embedded_graphics::prelude::*;
 use embedded_graphics::prelude::{Point, Size};
-use embedded_graphics::primitives::{Rectangle};
+use embedded_graphics::primitives::Rectangle;
 use embedded_graphics::text::{Alignment, Baseline, Text, TextStyleBuilder};
 use embedded_layout::align::{horizontal, vertical, Align};
+use embedded_nal_async::{Dns, TcpConnect};
 use esp_backtrace as _;
 use esp_hal::clock::CpuClock;
+use esp_hal::i2c;
 use esp_hal::peripherals::{GPIO4, GPIO5, I2C0};
-use esp_hal::rng::Rng;
+use esp_hal::rtc_cntl::Rtc;
 use esp_hal::time::Rate;
 use esp_hal::timer::timg::TimerGroup;
-use esp_println::println;
 use esp_rust_no_std_weather_station::draw_plot::TimePlot;
 use esp_rust_no_std_weather_station::dto::OpenMeteoResponse;
 use esp_wifi::wifi::{ClientConfiguration, Configuration, WifiController, WifiState};
 use log::{debug, error, info};
-use reqwless::client::{HttpClient, TlsConfig};
+use reqwless::client::HttpClient;
 use reqwless::request::Method;
+use smoltcp::wire::DnsQueryType;
+use sntpc::{NtpContext, NtpTimestampGenerator};
 use ssd1306::mode::DisplayConfigAsync;
 use ssd1306::prelude::{Brightness, I2CInterface};
 use ssd1306::size::DisplaySize128x64;
-use static_cell::{StaticCell};
-use time::format_description::well_known::Iso8601;
-use time::PrimitiveDateTime;
+use static_cell::StaticCell;
+use time::{OffsetDateTime, PrimitiveDateTime};
 
-// This creates a default app-descriptor required by the esp-idf bootloader.
-// For more information see: <https://docs.espressif.com/projects/esp-idf/en/stable/esp32/api-reference/system/app_image_format.html#application-description>
 esp_bootloader_esp_idf::esp_app_desc!();
+
+const SSID: &str = env!("SSID");
+const PASSWORD: &str = env!("PASSWORD");
+const NTP_SERVER: &str = "0.ru.pool.ntp.org";
 
 #[derive(Debug, Clone, Copy)]
 enum AppEvent {
@@ -69,12 +76,11 @@ type PubSub = PubSubChannel<NoopRawMutex, AppEvent, 32, 16, 16>;
 
 #[esp_hal_embassy::main]
 async fn main(spawner: Spawner) {
-    // generator version: 0.4.0
-
     esp_println::logger::init_logger_from_env();
 
     let config = esp_hal::Config::default().with_cpu_clock(CpuClock::max());
     let peripherals = esp_hal::init(config);
+    let rtc = Rtc::new(peripherals.LPWR);
 
     esp_alloc::heap_allocator!(size: 64 * 1024);
 
@@ -103,30 +109,31 @@ async fn main(spawner: Spawner) {
     let pub_sub = &*PUB_SUB.init(PubSubChannel::new());
 
     spawner.must_spawn(screen_renderer_task(
-        &pub_sub,
         peripherals.GPIO5,
         peripherals.GPIO4,
         peripherals.I2C0,
+        pub_sub.dyn_subscriber().unwrap(),
     ));
 
-    embassy_futures::join::join3(
+    embassy_futures::join::join4(
         sta_runner.run(),
-        wifi_connection("SSID", "PASS", wifi_controller),
-        weather_updater(&pub_sub, net_stack, rng),
+        wifi_connection(SSID, PASSWORD, wifi_controller),
+        weather_updater(net_stack, pub_sub.dyn_publisher().unwrap()),
+        req_time_from_ntps(net_stack, rtc, pub_sub.dyn_publisher().unwrap()),
     )
     .await;
 }
 
 #[embassy_executor::task]
 async fn screen_renderer_task(
-    pubsub: &'static PubSub,
     sda_pin: GPIO5<'static>,
     scl_pin: GPIO4<'static>,
     i2c_per: I2C0<'static>,
+    mut subscriber: DynSubscriber<'static, AppEvent>,
 ) {
-    let mut i2c = esp_hal::i2c::master::I2c::new(
+    let mut i2c = i2c::master::I2c::new(
         i2c_per,
-        esp_hal::i2c::master::Config::default().with_frequency(Rate::from_khz(400u32)),
+        i2c::master::Config::default().with_frequency(Rate::from_khz(400u32)),
     )
     .unwrap()
     .with_sda(sda_pin)
@@ -144,13 +151,11 @@ async fn screen_renderer_task(
 
     let screen_area = Rectangle::new(Point::zero(), Size::new(128, 64));
 
-    let mut is_first_page = true;
     let mut date = PrimitiveDateTime::MIN;
     let mut min_t: f32 = -20.0;
     let mut max_t: f32 = 20.0;
     let mut cur_t: f32 = 10.0;
     let mut rain_p: [f32; 24] = [100.0; 24];
-    let mut sub = pubsub.dyn_subscriber().unwrap();
 
     let mut plot = TimePlot::new();
     plot.bar_height = 20;
@@ -159,7 +164,7 @@ async fn screen_renderer_task(
     plot = plot.align_to(&screen_area, horizontal::Center, vertical::Bottom);
 
     loop {
-        match sub.next_message_pure().await {
+        match subscriber.next_message_pure().await {
             AppEvent::WeatherChanged {
                 current,
                 max,
@@ -172,7 +177,6 @@ async fn screen_renderer_task(
                 rain_p = rain_probability;
             }
             AppEvent::TimeChanged(d) => date = d,
-            AppEvent::ButtonPressed => is_first_page = !is_first_page,
             _ => {}
         }
 
@@ -268,72 +272,62 @@ async fn screen_renderer_task(
     }
 }
 
-async fn weather_updater(pubsub: &'static PubSub, net_stack: embassy_net::Stack<'_>, mut rng: Rng) {
-    const RX_SIZE: usize = 4096;
-    const TX_SIZE: usize = 4096;
-    let mut rx_buffer = [0; RX_SIZE];
-    let mut tx_buffer = [0; TX_SIZE];
+async fn weather_updater(net_stack: embassy_net::Stack<'_>, publisher: DynPublisher<'_, AppEvent>) {
     let dns = DnsSocket::new(net_stack);
-    let tcp_state = TcpClientState::<1, TX_SIZE, RX_SIZE>::new();
+    let tcp_state = TcpClientState::<1, 4096, 4096>::new();
     let tcp = TcpClient::new(net_stack, &tcp_state);
 
-    let tls_seed = rng.random() as u64 | ((rng.random() as u64) << 32);
-    let tls = TlsConfig::new(
-        tls_seed,
-        &mut rx_buffer,
-        &mut tx_buffer,
-        reqwless::client::TlsVerify::None,
-    );
-
+    let req_timeout = Duration::from_secs(1);
     let url = "http://api.open-meteo.com/v1/forecast?\
             latitude=55.7522&longitude=37.6156&\
             current=temperature_2m&hourly=precipitation_probability&\
             daily=weather_code,temperature_2m_max,temperature_2m_min,sunrise,sunset&\
             timezone=Europe%2FMoscow&forecast_days=1";
-    let mut client = HttpClient::new_with_tls(&tcp, &dns, tls);
-    let publisher = pubsub.immediate_publisher();
+    let mut client = HttpClient::new(&tcp, &dns);
     let mut http_resp_buffer = [0u8; 2048];
 
     loop {
         if net_stack.is_link_up() {
-            let date: anyhow::Result<PrimitiveDateTime> = try {
-                let mut http_request = client
-                    .request(Method::GET, url)
-                    .await
-                    .map_err(|e| anyhow!("error request {:?}", e))?;
-
-                let response = http_request
-                    .send(&mut http_resp_buffer)
-                    .await
-                    .map_err(|e| anyhow!("error send {:?}", e))?;
-
-                let res = response
-                    .body()
-                    .read_to_end()
-                    .await
-                    .map_err(|e| anyhow!("error body read {:?}", e))?;
-
-                let json = serde_json::from_slice::<OpenMeteoResponse>(&res)
-                    .map_err(|e| anyhow!("json syntax error {:?}", e))?;
-
-                let date = PrimitiveDateTime::parse(&json.current.time, &Iso8601::DEFAULT)
-                    .map_err(|e| anyhow!("fail to parse date {:?}", e))?;
-
-                publisher.publish_immediate(AppEvent::TimeChanged(date));
-                publisher.publish_immediate(AppEvent::WeatherChanged {
-                    current: json.current.temperature_2m,
-                    max: json.daily.temperature_2m_max[0],
-                    min: json.daily.temperature_2m_min[0],
-                    rain_probability: json.hourly.precipitation_probability,
-                });
-
-                date
-            };
-
-            debug!("http response {:?}", date);
+            let http_req = fetch_weather(url, &mut client, &mut http_resp_buffer, &publisher);
+            let http_res = with_timeout(req_timeout, http_req).await;
+            debug!("weather fetch result: {:?}", http_res);
         }
         Timer::after(Duration::from_millis(5000)).await;
     }
+}
+
+async fn fetch_weather(
+    url: &str,
+    client: &mut HttpClient<'_, impl TcpConnect, impl Dns>,
+    http_resp_buffer: &mut [u8; 2048],
+    publisher: &DynPublisher<'_, AppEvent>,
+) -> anyhow::Result<()> {
+    let mut http_request = client
+        .request(Method::GET, url)
+        .await
+        .map_err(|e| anyhow!("error request {:?}", e))?;
+
+    let response = http_request
+        .send(http_resp_buffer)
+        .await
+        .map_err(|e| anyhow!("error send {:?}", e))?;
+
+    let res = response
+        .body()
+        .read_to_end()
+        .await
+        .map_err(|e| anyhow!("error body read {:?}", e))?;
+
+    let json = serde_json::from_slice::<OpenMeteoResponse>(&res)
+        .map_err(|e| anyhow!("json syntax error {:?}", e))?;
+
+    publisher.publish_immediate(AppEvent::WeatherChanged {
+        current: json.current.temperature_2m,
+        max: json.daily.temperature_2m_max[0],
+        min: json.daily.temperature_2m_min[0],
+        rain_probability: json.hourly.precipitation_probability,
+    });
+    Ok(())
 }
 
 async fn wifi_connection<'a>(ssid: &str, password: &str, mut controller: WifiController<'a>) {
@@ -345,7 +339,7 @@ async fn wifi_connection<'a>(ssid: &str, password: &str, mut controller: WifiCon
                 .unwrap();
             controller.start_async().await.unwrap();
         }
-        if wifi_state == WifiState::StaStarted {
+        if wifi_state == WifiState::StaStarted || wifi_state == WifiState::StaDisconnected {
             let client_config = Configuration::Client(ClientConfiguration {
                 ssid: ssid.try_into().unwrap(),
                 password: password.try_into().unwrap(),
@@ -357,5 +351,84 @@ async fn wifi_connection<'a>(ssid: &str, password: &str, mut controller: WifiCon
             let _ = controller.connect_async().await;
         }
         Timer::after(Duration::from_millis(5000)).await;
+    }
+}
+
+async fn req_time_from_ntps(
+    net_stack: embassy_net::Stack<'_>,
+    rtc: Rtc<'_>,
+    publisher: DynPublisher<'_, AppEvent>,
+) {
+    let mut rx_meta = [PacketMetadata::EMPTY; 16];
+    let mut rx_buffer = [0; 4096];
+    let mut tx_meta = [PacketMetadata::EMPTY; 16];
+    let mut tx_buffer = [0; 4096];
+    const USEC_IN_SEC: u64 = 1_000_000;
+    let mut socket = UdpSocket::new(
+        net_stack,
+        &mut rx_meta,
+        &mut rx_buffer,
+        &mut tx_meta,
+        &mut tx_buffer,
+    );
+    socket.bind(123).unwrap();
+    debug!("Starting NTP loop...");
+    loop {
+        Timer::after(Duration::from_secs(5)).await;
+        if net_stack.is_link_up() == false {
+            continue;
+        }
+
+        debug!("Resolving NTP server address...");
+        let Ok(ntp_addrs) = net_stack.dns_query(NTP_SERVER, DnsQueryType::A).await else {
+            continue;
+        };
+
+        debug!("NTP addresses: {:?}", ntp_addrs);
+        let addr: IpAddr = ntp_addrs[0].into();
+        debug!("Querying NTP server at address {:?}", addr);
+        let result = with_timeout(
+            Duration::from_secs(5),
+            sntpc::get_time(
+                SocketAddr::from((addr, 123)),
+                &socket,
+                NtpContext::new(Timestamp {
+                    rtc: &rtc,
+                    current_time_us: 0,
+                }),
+            ),
+        )
+        .await;
+
+        if let Ok(Ok(time)) = result {
+            let usec = (time.sec() as u64 * USEC_IN_SEC)
+                + ((time.sec_fraction() as u64 * USEC_IN_SEC) >> 32);
+            rtc.set_current_time_us(usec);
+
+            let odt = OffsetDateTime::from_unix_timestamp(time.sec() as i64).unwrap();
+            let date = PrimitiveDateTime::new(odt.date(), odt.time());
+            info!("NTP time: {date}");
+            publisher.publish_immediate(AppEvent::TimeChanged(date));
+        }
+    }
+}
+
+#[derive(Clone, Copy)]
+struct Timestamp<'a> {
+    rtc: &'a Rtc<'a>,
+    current_time_us: u64,
+}
+
+impl NtpTimestampGenerator for Timestamp<'_> {
+    fn init(&mut self) {
+        self.current_time_us = self.rtc.current_time_us();
+    }
+
+    fn timestamp_sec(&self) -> u64 {
+        self.current_time_us / 1_000_000
+    }
+
+    fn timestamp_subsec_micros(&self) -> u32 {
+        (self.current_time_us % 1_000_000) as u32
     }
 }

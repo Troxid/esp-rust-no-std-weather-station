@@ -1,6 +1,6 @@
 [package]
 edition = "2021"
-name    = "esp-rust-no-std-weather-station"
+name = "esp-rust-no-std-weather-station"
 version = "0.1.0"
 
 [[bin]]
@@ -39,7 +39,7 @@ embassy-net = { version = "0.7.0", features = [
   "medium-ethernet",
   "tcp",
   "udp",
-  "dns",  # добавленный feature
+  "dns",             # добавленный feature
 ] }
 embedded-io = "0.6.1"
 embedded-io-async = "0.6.1"
@@ -79,25 +79,29 @@ smoltcp = { version = "0.12.0", default-features = false, features = [
   "socket-raw",
   "socket-tcp",
   "socket-udp",
-  "dns-max-server-count-4" # добавленный feature
+  "dns-max-server-count-4", # добавленный feature
 ] }
 static_cell = { version = "2.1.0", features = ["nightly"] }
 
 # Дополнительные зависимости
 heapless = { version = "0.8.0", features = ["serde"] }
-time = {version = "0.3.41", default-features = false, features = ["parsing"]}
+time = { version = "0.3.41", default-features = false, features = ["parsing"] }
 embassy-futures = "0.1.1"
-serde = { version = "1.0", default-features = false, features = ["derive"]}
+serde = { version = "1.0", default-features = false, features = ["derive"] }
 serde_json = { version = "1.0", default-features = false, features = ["alloc"] }
 embassy-sync = "0.7.0"
-anyhow = { version = "1.0.98", default-features = false } 
+anyhow = { version = "1.0.98", default-features = false }
 reqwless = { version = "0.13.0", default-features = false, features = [
   "alloc",
   "embedded-tls",
 ] }
-ssd1306 = {version = "0.10.0", features = ["async"]} 
-embedded-graphics = "0.8.1" 
-embedded-layout = "0.4.1" 
+ssd1306 = { version = "0.10.0", features = ["async"] }
+embedded-nal-async = "0.8.0"
+embedded-graphics = "0.8.1"
+embedded-layout = "0.4.1"
+sntpc = { version = "0.6.0", default-features = false, features = [
+  "embassy-socket",
+] }
 
 
 [profile.dev]
@@ -106,10 +110,10 @@ embedded-layout = "0.4.1"
 opt-level = "s"
 
 [profile.release]
-codegen-units    = 1     # LLVM can perform better optimizations using a single thread
-debug            = 2
+codegen-units = 1        # LLVM can perform better optimizations using a single thread
+debug = 2
 debug-assertions = false
-incremental      = false
-lto              = 'fat'
-opt-level        = 's'
-overflow-checks  = false
+incremental = false
+lto = 'fat'
+opt-level = 's'
+overflow-checks = false

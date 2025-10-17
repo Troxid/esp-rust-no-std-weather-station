@@ -4,6 +4,8 @@ runner = "espflash flash --monitor --chip esp32"
 [env]
 ESP_LOG="debug"
 ESPFLASH_BAUD="460800"
+SSID = "SSID"
+PASSWORD = "PASSWORD"
 
 [build]
 rustflags = [
